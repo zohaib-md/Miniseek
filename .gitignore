@@ -1,0 +1,18 @@
+# Binaries and local apps
+bin/
+*.app/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# MiniSeek runtime data
+.miniseek/
+workspace/.miniseek_memory.json
+workspace/.janitor_undo.json
+
+# OS files
+.DS_Store
+Thumbs.db

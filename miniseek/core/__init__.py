@@ -1,0 +1,3 @@
+"""
+MiniSeek Core Package
+"""

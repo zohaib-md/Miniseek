@@ -1,0 +1,3 @@
+"""
+MiniSeek Automated Test Suite
+"""
