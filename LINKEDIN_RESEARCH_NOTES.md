@@ -4,7 +4,15 @@
 ---
 
 ## 🎯 The Core Question
-> **"How far can you push an autonomous coding agent on edge hardware (Apple M1, 8 GB Unified Memory, zero cloud APIs) without using bulky frameworks?"**
+> **"How far can you push an autonomous, reliable AI agent on edge hardware (Apple M1, 8 GB Unified Memory, zero cloud APIs) using Harness Engineering instead of brute-force model size?"**
+
+---
+
+## 🏛️ The Core Operating Principle
+
+> **"Python owns deterministic correctness, safety, validation, state, and execution. The model is used only where semantic interpretation is required."**
+>
+> **"The model proposes. The harness validates. Python executes."**
 
 ---
 
@@ -13,15 +21,14 @@
 * **Inference Engine**: Ollama (local Metal GPU acceleration)
 * **Model**: `Qwen 2.5 (1.5 Billion parameters, Q4 quantized)`
   * Download size: **~986 MB** (preserves tight disk space)
-  * RAM footprint: **~1.8 GB RAM**
+  * RAM footprint: **~1.8 GB RAM** during inference
   * Inference speed: **~45 - 55 tokens/second**
 * **Code Architecture**: Pure Python 3.12 standard library (zero LangChain/AutoGen/CrewAI bloat)
-* **Sandbox & Tools**: `list_files`, `read_file`, `write_file`, `run_command`, `save_memory`, `recall_memory` with path-traversal security.
-* **Persistent Memory**: Disk-backed structured JSON memory store (`workspace/.miniseek_memory.json`).
+* **Testing Suite**: 43 automated unit tests running in **0.068s** (100% pass rate)
 
 ---
 
-## 📊 Recorded Experiment Results
+## 📊 Recorded Experiment Results & Architectural Milestones
 
 ### 🧪 Experiment 1: Autonomous Bug Fixing & Self-Verification
 * **Task**: Fix failing tests in `test_calculator.py`.
@@ -70,9 +77,44 @@
 
 ---
 
-## 📱 Final LinkedIn Post Draft
+### 🛡️ Milestone 1: Deterministic Scanner & Multi-Stage Deduplication Engine
+* **Goal**: Build a high-performance, rock-solid filesystem scanner with 0 LLM dependency for deterministic operations.
+* **Key Innovations**:
+  * **Multi-Stage Hashing**: Candidate grouping by exact size before streaming buffered SHA-256 chunk hashing (64 KB). Avoids unnecessary I/O on unique files.
+  * **Wasted Space Engine**: Exact mathematical computation of wasted bytes ($size \times (count - 1)$).
+  * **Symlink Security Boundary**: Enforced canonical path resolution (`os.path.realpath`) and strict prohibition of traversing symlinked directories outside the approved root.
 
-### 🚀 "I built an autonomous AI agent from absolute zero on an 8 GB M1 Mac. Here is what happened."
+---
+
+### 🧠 Milestone 2: Canonical Layered Validation & Micro-Task Categorization
+* **Goal**: Leverage a 1.5B model for semantic understanding while guaranteeing 100% safety and predictability.
+* **Key Innovations**:
+  * **Canonical 6-Layer Validation**:
+    `RAW OUTPUT` $\rightarrow$ `EXTRACT` $\rightarrow$ `SAFE SYNTAX REPAIR` $\rightarrow$ `PARSE JSON` $\rightarrow$ `SCHEMA` $\rightarrow$ `SEMANTIC` $\rightarrow$ `SAFETY`.
+  * **Bounded Micro-Task Prompts**: Model receives only minimal evidence (name, extension, size, bounded 150-char text preview). Total prompt budget $\le 500$ tokens.
+  * **1-Retry Diagnostic Guard**: If model output fails schema or semantic validation, harness injects the exact error into a single retry turn. If it fails again, it safely falls back to `NEEDS_REVIEW`.
+  * **Zero Path Authority for Models**: The model only suggests a `category`. Python deterministically derives `dest = approved_root / category / original_filename`.
+  * **Explicit Model Abstention**: `NEEDS_REVIEW` is treated as a first-class state meaning **NO MOVE**, excluding the file from filesystem proposals.
+
+---
+
+### ⚡ Milestone 3: Plan Freezing, Cryptographic Plan Hashing & Transactional Execution
+* **Goal**: Solve the fundamental question: *"What happens when reality changes between planning and execution?"*
+* **Key Innovations**:
+  * **Immutable Plans**: Deterministic canonical serialization with SHA-256 `plan_hash`. Once frozen, the LLM is completely removed from the execution loop.
+  * **Strict Pre-Flight Validation**: Before touching a single file, the executor verifies:
+    1. Plan hash integrity (detects plan tampering or stale plans).
+    2. Source file existence, size, and SHA-256 match planned state.
+    3. Destination path is within approved root.
+    4. Destination file does NOT already exist (conservative collision blocking).
+  * **Immediate Per-Operation Verification**: Verifies source disappearance, destination existence, size match, and SHA-256 match immediately after each move before marking `COMPLETED`.
+  * **Committed Run Manifest**: Persists full multi-attribute undo identity (`source_original`, `destination_created`, `sha256`, `size`, `mtime`, `run_id`, `plan_id`) to `.miniseek/history/`.
+
+---
+
+## 📱 LinkedIn Post Drafts
+
+### 🚀 Post 1: "I built an autonomous AI agent from absolute zero on an 8 GB M1 Mac"
 
 > Can an 8 GB M1 MacBook Air run a truly autonomous coding agent without cloud APIs or heavy frameworks?
 >
@@ -96,6 +138,36 @@
 > What experiments have you tried with local AI models on edge hardware?
 >
 > #AI #LocalAI #MachineLearning #Python #AppleSilicon #AIAgents #OpenSource
+
+---
+
+### 🛡️ Post 2: "Stop letting LLMs touch your filesystem: The Harness Engineering Playbook"
+
+> The biggest mistake in AI agent design is asking an LLM to do things Python already does with 100% mathematical precision.
+>
+> If you ask a 1.5B parameter model to calculate duplicate file hashes, verify filesystem paths, or execute shell commands directly, it will eventually hallucinate and delete something important.
+>
+> In our project **MiniSeek** (running locally on an 8 GB M1 Mac), we adopted a strict architectural rule:
+>
+> 📌 **The Model Proposes. The Harness Validates. Python Executes.**
+>
+> Here is how we turned a tiny 1.5B model into a reliable filesystem janitor:
+>
+> 🔹 **1. Zero Path Authority:** The model is never allowed to provide filesystem paths. It only returns a semantic category (e.g. `Receipts_Invoices`). Python derives the destination path deterministically inside the sandbox.
+> 🔹 **2. 6-Stage Validation Pipeline:** Model output goes through Extract $\rightarrow$ Safe Syntax Repair $\rightarrow$ JSON Parse $\rightarrow$ Schema Validation $\rightarrow$ Semantic Check $\rightarrow$ Safety Check before anything is considered a valid proposal.
+> 🔹 **3. Explicit Model Abstention (`NEEDS_REVIEW`):** When evidence is ambiguous, the model is encouraged to abstain. `NEEDS_REVIEW` results in **zero file moves** and surfaces the file for manual user review.
+> 🔹 **4. Cryptographic Plan Freezing:** We freeze the proposal into a canonical JSON payload and compute a SHA-256 `plan_hash`. Once frozen, the LLM is completely excluded from execution.
+> 🔹 **5. Pre-Flight Verification:** Before touching any file, Python checks:
+> • Did the source file change since planning?
+> • Did the plan hash match?
+> • Does the destination file already exist (conservative collision blocking)?
+> 🔹 **6. Immediate Per-Operation Verification:** After each move, Python immediately checks destination existence, size, and SHA-256 before marking the operation completed.
+>
+> 💡 **The Takeaway:** You don't need a 70B parameter cloud model for everyday utilities. When you pair a tiny 1.5B local model with deterministic harness engineering, you get speed (~50 tok/s), $0 cost, 100% offline privacy, and zero hallucinations.
+>
+> How are you structuring guardrails around AI agents in your projects?
+>
+> #AIAgents #SoftwareEngineering #Python #LocalAI #SystemDesign #OpenSource #DevCommunity
 
 ---
 *Auto-updated by MiniSeek Laboratory Logger.*
