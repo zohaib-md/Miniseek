@@ -14,14 +14,15 @@ class Config:
     model_name: str = "qwen2.5:1.5b"
     ollama_host: str = "http://127.0.0.1:11434"
 
-    # Semantic Categorization Allowed Set
+    # Semantic Categorization Allowed Set (includes explicit model abstentions)
     allowed_categories: Tuple[str, ...] = (
         "Documents",
         "Receipts_Invoices",
         "Media_Images",
         "Code",
         "Archives_Data",
-        "UNCATEGORIZED"
+        "UNCATEGORIZED",
+        "NEEDS_REVIEW"
     )
 
     # File Janitor Scanning Settings
