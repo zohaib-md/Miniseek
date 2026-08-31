@@ -1,5 +1,28 @@
+import json
+import hashlib
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Optional
+
+class PlanStatus:
+    """Execution lifecycle state machine for reorganization plans."""
+    PLANNED = "PLANNED"
+    VALIDATED = "VALIDATED"
+    APPROVED = "APPROVED"
+    EXECUTING = "EXECUTING"
+    COMMITTED = "COMMITTED"
+    FAILED = "FAILED"
+    PARTIALLY_EXECUTED = "PARTIALLY_EXECUTED"
+    ROLLED_BACK = "ROLLED_BACK"
+    PARTIALLY_ROLLED_BACK = "PARTIALLY_ROLLED_BACK"
+
+class OperationStatus:
+    """Per-operation state machine for discrete filesystem actions."""
+    PENDING = "PENDING"
+    EXECUTING = "EXECUTING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    BLOCKED = "BLOCKED"
+    ROLLED_BACK = "ROLLED_BACK"
 
 @dataclass
 class FileInfo:
@@ -71,14 +94,27 @@ class ScanResult:
         }
 
 @dataclass
+class NeedsReviewItem:
+    """Record of an abstained or ambiguous file excluded from move operations."""
+    file_path: str
+    relative_path: str
+    reason: str
+    evidence: Dict[str, Any]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+@dataclass
 class PlanItem:
     """A single proposed file move action within an immutable plan."""
+    operation_id: int
     source_path: str
     destination_path: str
     category: str
-    evidence: Dict[str, Any]
-    sha256: str
-    size_bytes: int
+    source_sha256: str
+    source_size: int
+    status: str = OperationStatus.PENDING
+    error_message: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -89,9 +125,41 @@ class Plan:
     plan_id: str
     plan_hash: str
     root_path: str
-    items: List[PlanItem] = field(default_factory=list)
-    created_at: str = ""
+    created_at: str
+    status: str = PlanStatus.VALIDATED
+    operations: List[PlanItem] = field(default_factory=list)
+    needs_review: List[NeedsReviewItem] = field(default_factory=list)
     model_metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def canonical_dict(self) -> Dict[str, Any]:
+        """Deterministic canonical representation for hashing and audit."""
+        return {
+            "plan_id": self.plan_id,
+            "root_path": self.root_path,
+            "operations": [
+                {
+                    "operation_id": op.operation_id,
+                    "source_path": op.source_path,
+                    "destination_path": op.destination_path,
+                    "category": op.category,
+                    "source_sha256": op.source_sha256,
+                    "source_size": op.source_size
+                }
+                for op in sorted(self.operations, key=lambda x: x.operation_id)
+            ],
+            "needs_review": [
+                {
+                    "file_path": nr.file_path,
+                    "reason": nr.reason
+                }
+                for nr in sorted(self.needs_review, key=lambda x: x.file_path)
+            ]
+        }
+
+    def compute_hash(self) -> str:
+        """Computes deterministic SHA-256 of the canonical plan structure."""
+        canonical_json = json.dumps(self.canonical_dict(), sort_keys=True, separators=(',', ':'))
+        return hashlib.sha256(canonical_json.encode('utf-8')).hexdigest()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -99,8 +167,40 @@ class Plan:
             "plan_hash": self.plan_hash,
             "root_path": self.root_path,
             "created_at": self.created_at,
+            "status": self.status,
             "model_metadata": self.model_metadata,
-            "items": [item.to_dict() for item in self.items]
+            "operations_count": len(self.operations),
+            "needs_review_count": len(self.needs_review),
+            "operations": [op.to_dict() for op in self.operations],
+            "needs_review": [nr.to_dict() for nr in self.needs_review]
+        }
+
+@dataclass
+class ExecutionResult:
+    """Outcome of a transactional plan execution run."""
+    plan_id: str
+    plan_hash: str
+    status: str
+    operations_total: int
+    operations_completed: int
+    operations_failed: int
+    operations_blocked: int
+    executed_operations: List[PlanItem] = field(default_factory=list)
+    error_message: Optional[str] = None
+    manifest_path: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "plan_id": self.plan_id,
+            "plan_hash": self.plan_hash,
+            "status": self.status,
+            "operations_total": self.operations_total,
+            "operations_completed": self.operations_completed,
+            "operations_failed": self.operations_failed,
+            "operations_blocked": self.operations_blocked,
+            "error_message": self.error_message,
+            "manifest_path": self.manifest_path,
+            "executed_operations": [op.to_dict() for op in self.executed_operations]
         }
 
 @dataclass
@@ -126,7 +226,7 @@ class RunManifest:
     plan_hash: str
     timestamp: str
     root_path: str
-    status: str  # "COMMITTED", "FAILED", "ROLLED_BACK", "PARTIALLY_ROLLED_BACK"
+    status: str  # "COMMITTED", "FAILED", "PARTIALLY_EXECUTED", "ROLLED_BACK", "PARTIALLY_ROLLED_BACK"
     operations: List[OperationRecord] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
