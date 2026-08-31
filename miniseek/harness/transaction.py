@@ -23,11 +23,19 @@ class ExecutionVerificationError(Exception):
 
 class TransactionExecutor:
     """
-    Transactional execution engine for verified, immutable reorganization plans.
+    Transactional execution engine with pre-flight validation, per-operation
+    verification, durable incremental operation state, and rollback support.
+
     - Pre-flight validation: verifies plan hash, source file integrity, and collision absence.
     - Conservative collision handling: aborts execution if destination already exists.
     - Immediate per-operation verification: verifies destination existence, size, and SHA-256.
-    - Commits run manifest to .miniseek/history/ for Milestone 4 undo tracking.
+    - Incremental manifest persistence: the run manifest is written to disk after EACH
+      completed operation, so that a crash mid-batch still records what was completed.
+    - Commits final run manifest to .miniseek/history/ for Milestone 4 undo tracking.
+
+    Note: filesystem moves via shutil.move() are NOT database-style atomic transactions.
+    A failure partway through a batch of moves is possible. The implementation uses
+    incremental state persistence and per-operation verification to support recovery.
     """
 
     def __init__(self, scanner: Optional[FileScanner] = None):
@@ -90,8 +98,11 @@ class TransactionExecutor:
 
     def execute_plan(self, plan: Plan, base_history_dir: Optional[Union[str, Path]] = None) -> ExecutionResult:
         """
-        Executes a frozen, approved plan transactionally with immediate post-op verification.
+        Executes a frozen, approved plan with per-operation verification and
+        incremental manifest persistence for crash consistency.
         """
+        history_base = Path(base_history_dir or plan.root_path)
+
         # Step 1: Strict Pre-flight validation
         is_valid, pre_flight_err = self.validate_pre_flight(plan)
         if not is_valid:
@@ -109,15 +120,33 @@ class TransactionExecutor:
             )
 
         plan.status = PlanStatus.EXECUTING
+
+        # Initialize incremental manifest
+        timestamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+        unique_id = uuid.uuid4().hex[:8]
+        run_id = f"run-{timestamp}-{unique_id}"
+        created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+        history_dir = history_base / ".miniseek" / "history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        manifest_file = history_dir / f"{run_id}.json"
+
         completed_records: List[OperationRecord] = []
         executed_ops: List[PlanItem] = []
         exec_error: Optional[str] = None
 
         # Step 2: Sequential operation execution with immediate verification
+        # and incremental manifest persistence after each operation
         for op in plan.operations:
             src = Path(op.source_path)
             dst = Path(op.destination_path)
             op.status = OperationStatus.EXECUTING
+
+            # Persist EXECUTING state before the move
+            self._write_manifest(
+                manifest_file, run_id, created_at, plan,
+                completed_records, PlanStatus.EXECUTING
+            )
 
             try:
                 # Create destination directory structure
@@ -159,6 +188,12 @@ class TransactionExecutor:
                 )
                 completed_records.append(record)
 
+                # Persist manifest incrementally after each successful operation
+                self._write_manifest(
+                    manifest_file, run_id, created_at, plan,
+                    completed_records, PlanStatus.EXECUTING
+                )
+
             except Exception as err:
                 op.status = OperationStatus.FAILED
                 op.error_message = str(err)
@@ -166,21 +201,18 @@ class TransactionExecutor:
                 plan.status = PlanStatus.PARTIALLY_EXECUTED
                 break
 
-        # Step 4: Finalize plan status and commit run manifest
+        # Step 4: Finalize plan status and persist final manifest
         if exec_error is None:
             plan.status = PlanStatus.COMMITTED
             final_status = PlanStatus.COMMITTED
         else:
             final_status = PlanStatus.PARTIALLY_EXECUTED
 
-        manifest_path = None
-        if completed_records:
-            manifest_path = self._commit_run_manifest(
-                plan=plan,
-                records=completed_records,
-                status=final_status,
-                base_dir=Path(base_history_dir or plan.root_path)
-            )
+        # Write final manifest state
+        self._write_manifest(
+            manifest_file, run_id, created_at, plan,
+            completed_records, final_status
+        )
 
         return ExecutionResult(
             plan_id=plan.plan_id,
@@ -192,25 +224,22 @@ class TransactionExecutor:
             operations_blocked=sum(1 for op in plan.operations if op.status == OperationStatus.PENDING),
             executed_operations=executed_ops,
             error_message=exec_error,
-            manifest_path=str(manifest_path) if manifest_path else None
+            manifest_path=str(manifest_file)
         )
 
-    def _commit_run_manifest(
+    def _write_manifest(
         self,
+        manifest_file: Path,
+        run_id: str,
+        created_at: str,
         plan: Plan,
         records: List[OperationRecord],
-        status: str,
-        base_dir: Path
-    ) -> Path:
-        """Persists immutable run manifest to .miniseek/history/run-<run_id>.json."""
-        history_dir = base_dir / ".miniseek" / "history"
-        history_dir.mkdir(parents=True, exist_ok=True)
-
-        timestamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
-        unique_id = uuid.uuid4().hex[:8]
-        run_id = f"run-{timestamp}-{unique_id}"
-        created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
+        status: str
+    ) -> None:
+        """
+        Writes the current run manifest state to disk.
+        Called incrementally after each operation for crash consistency.
+        """
         manifest = RunManifest(
             run_id=run_id,
             plan_id=plan.plan_id,
@@ -218,11 +247,8 @@ class TransactionExecutor:
             timestamp=created_at,
             root_path=plan.root_path,
             status=status,
-            operations=records
+            operations=list(records)
         )
 
-        manifest_file = history_dir / f"{run_id}.json"
         with open(manifest_file, "w", encoding="utf-8") as f:
             json.dump(manifest.to_dict(), f, indent=2)
-
-        return manifest_file
