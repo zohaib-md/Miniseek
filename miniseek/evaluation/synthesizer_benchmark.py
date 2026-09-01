@@ -152,10 +152,10 @@ class SynthesizerBenchmarkRunner:
                     vendor_matches += 1
 
                 # Amount check
-                if s.expected_amount is not None:
+                if s.expected_amount is not None and norm_tx.amount is not None:
                     if str(norm_tx.amount) == str(Decimal(s.expected_amount)):
                         amount_matches += 1
-                elif norm_tx.amount == Decimal("0.00"):
+                elif s.expected_amount is None and norm_tx.amount is None:
                     amount_matches += 1
 
                 # Date check

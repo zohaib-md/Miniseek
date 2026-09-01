@@ -200,7 +200,7 @@ class ExpenseNormalizer:
         # Status adjustment
         status = raw_tx.status
         if amount_dec is None:
-            amount_dec = Decimal("0.00")
+            # Unreadable / missing amounts remain None (never silently converted to 0.00)
             status = ExtractionStatus.NEEDS_REVIEW
         elif is_ambiguous:
             status = ExtractionStatus.AMBIGUOUS
@@ -225,6 +225,7 @@ class DecimalMathEngine:
     Exact financial arithmetic and aggregation engine using Python Decimal.
     - Zero floating point numbers.
     - Enforces isolated multi-currency computation (USD, INR, EUR never mixed).
+    - Excludes unreadable/missing (None) amounts from arithmetic sums.
     """
 
     @classmethod
@@ -234,16 +235,7 @@ class DecimalMathEngine:
     ) -> Dict[str, Dict[str, Any]]:
         """
         Computes exact financial metrics grouped strictly by currency.
-        Returns:
-        {
-          "USD": {
-            "total_amount": Decimal("142.50"),
-            "transaction_count": 3,
-            "category_totals": {"Software_Cloud": Decimal("142.50"), ...},
-            "average_transaction": Decimal("47.50")
-          },
-          "INR": { ... }
-        }
+        Excludes transactions with amount=None from arithmetic totals.
         """
         breakdown: Dict[str, Dict[str, Any]] = {}
 
@@ -258,19 +250,21 @@ class DecimalMathEngine:
         for curr, tx_list in by_curr.items():
             total = Decimal("0.00")
             category_sums: Dict[str, Decimal] = {}
+            numeric_count = 0
 
             for tx in tx_list:
-                total += tx.amount
-                cat = tx.category or "UNCATEGORIZED"
-                category_sums[cat] = category_sums.get(cat, Decimal("0.00")) + tx.amount
+                if tx.amount is not None:
+                    total += tx.amount
+                    numeric_count += 1
+                    cat = tx.category or "UNCATEGORIZED"
+                    category_sums[cat] = category_sums.get(cat, Decimal("0.00")) + tx.amount
 
-            count = len(tx_list)
-            avg = (total / Decimal(count)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if count > 0 else Decimal("0.00")
+            avg = (total / Decimal(numeric_count)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if numeric_count > 0 else Decimal("0.00")
 
             breakdown[curr] = {
                 "currency": curr,
                 "total_amount": total,
-                "transaction_count": count,
+                "transaction_count": numeric_count,
                 "category_totals": category_sums,
                 "average_transaction": avg
             }

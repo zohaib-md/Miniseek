@@ -81,7 +81,8 @@ class ExpenseReporter:
             for t in summary.needs_review_transactions:
                 ev = t.provenance.get("amount", t.provenance.get("vendor", None))
                 snippet = ev.evidence_snippet if ev else "Ambiguous or incomplete data"
-                lines.append(f"| `{t.transaction_id}` | `{t.source_file}` | {t.vendor} | `{t.currency} {t.amount}` | {snippet} |")
+                amt_str = f"`{t.currency} {t.amount:,.2f}`" if t.amount is not None else "`UNKNOWN`"
+                lines.append(f"| `{t.transaction_id}` | `{t.source_file}` | {t.vendor} | {amt_str} | {snippet} |")
             lines.append("")
 
         # Itemized Ledger
@@ -92,9 +93,10 @@ class ExpenseReporter:
         ])
         for t in summary.all_transactions:
             flag = "⚠️ DUP" if t.is_duplicate_candidate else t.status.value
+            amt_str = f"`{t.currency} {t.amount:,.2f}`" if t.amount is not None else "`UNKNOWN`"
             lines.append(
                 f"| `{t.transaction_id}` | {t.date or '—'} | {t.vendor} | {t.category} | "
-                f"`{t.currency} {t.amount:,.2f}` | `{t.source_file}` | {flag} |"
+                f"{amt_str} | `{t.source_file}` | {flag} |"
             )
         lines.append("")
 
@@ -131,7 +133,7 @@ class ExpenseReporter:
                 t.date or "",
                 t.vendor,
                 t.category,
-                str(t.amount),
+                str(t.amount) if t.amount is not None else "",
                 t.currency,
                 t.status.value,
                 "YES" if t.is_duplicate_candidate else "NO",

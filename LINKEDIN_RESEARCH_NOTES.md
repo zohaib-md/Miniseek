@@ -24,7 +24,7 @@
   * RAM footprint: **~1.8 GB RAM** during inference
   * Inference speed: **~45 - 55 tokens/second**
 * **Code Architecture**: Pure Python 3.12 standard library (zero LangChain/AutoGen/CrewAI bloat)
-* **Testing Suite**: 136 automated unit, security, and benchmark tests running in **0.386s** (100% pass rate)
+* **Testing Suite**: 138 automated unit, security, and benchmark tests running in **0.157s** (100% pass rate)
 
 ---
 

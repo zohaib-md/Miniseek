@@ -110,11 +110,11 @@
     "content_chunk": "Office Depot\nDate: 2026-08-22\nPurchased: Printer Paper Ream\nTotal: [TEAR / UNREADABLE]",
     "expected_vendor": "Office Depot",
     "expected_date": "2026-08-22",
-    "expected_amount": "0.00",
+    "expected_amount": null,
     "expected_currency": "USD",
     "expected_category": "NEEDS_REVIEW",
     "expected_status": "NEEDS_REVIEW",
-    "description": "Receipt with missing / torn amount requiring human review"
+    "description": "Receipt with missing / torn amount requiring human review (amount is null, not 0.00)"
   },
   {
     "id": "exp_010_non_financial",

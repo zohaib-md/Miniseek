@@ -118,12 +118,13 @@ class ExpenseAggregator:
         Match key: (normalized_vendor, normalized_date, amount, currency)
         Flags transactions without deleting them.
         """
-        seen_keys: Dict[Tuple[str, str, Decimal, str], List[NormalizedTransaction]] = {}
+        seen_keys: Dict[Tuple[str, str, Any, str], List[NormalizedTransaction]] = {}
         for tx in transactions:
             # Build normalized composite key
             norm_vendor = tx.vendor.strip().lower()
             norm_date = tx.date or "NO_DATE"
-            key = (norm_vendor, norm_date, tx.amount, tx.currency)
+            amt_key = tx.amount if tx.amount is not None else "NO_AMOUNT"
+            key = (norm_vendor, norm_date, amt_key, tx.currency)
 
             if key not in seen_keys:
                 seen_keys[key] = []
@@ -138,7 +139,7 @@ class ExpenseAggregator:
                 dup_info = {
                     "vendor": vendor,
                     "date": date,
-                    "amount": str(amount),
+                    "amount": str(amount) if amount != "NO_AMOUNT" else "UNKNOWN",
                     "currency": curr,
                     "occurrences_count": len(tx_list),
                     "sources": list(set(t.source_file for t in tx_list)),
@@ -150,9 +151,10 @@ class ExpenseAggregator:
                 for idx, t in enumerate(tx_list):
                     t.is_duplicate_candidate = True
                     other_sources = [other.source_file for other in tx_list if other != t]
+                    amt_str = f"{t.currency} {t.amount}" if t.amount is not None else "UNKNOWN AMOUNT"
                     t.duplicate_reason = (
                         f"Possible duplicate ({len(tx_list)} matches): "
-                        f"Same vendor '{t.vendor}', date '{t.date}', and amount {t.currency} {t.amount} "
+                        f"Same vendor '{t.vendor}', date '{t.date}', and amount {amt_str} "
                         f"found in {', '.join(set(other_sources)) or 'same file'}."
                     )
 

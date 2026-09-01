@@ -152,5 +152,57 @@ class TestMathEngine(unittest.TestCase):
         self.assertEqual(cat_sums["Software_Cloud"], Decimal("80.00"))
         self.assertEqual(breakdown["USD"]["average_transaction"], Decimal("40.00"))
 
+    def test_unreadable_missing_amount_is_none_and_excluded_from_arithmetic(self):
+        """Unreadable/missing amount must become amount=None, NEEDS_REVIEW, and be excluded from math."""
+        raw_tx = RawExtractedTransaction(
+            vendor="Office Depot",
+            date_str="2026-08-22",
+            amount_str=None,  # Unreadable / torn amount
+            currency_str="USD",
+            category="Office_Hardware"
+        )
+        norm_tx = ExpenseNormalizer.normalize_transaction(raw_tx, source_file="torn.txt")
+
+        self.assertIsNone(norm_tx.amount)
+        self.assertEqual(norm_tx.status, ExtractionStatus.NEEDS_REVIEW)
+
+        # In arithmetic, tx with amount=None must be excluded from totals
+        clean_tx = NormalizedTransaction(
+            transaction_id="1", source_file="doc", vendor="AWS", date="2026-08-01",
+            amount=Decimal("100.00"), currency="USD", category="Software_Cloud", status=ExtractionStatus.EXTRACTED
+        )
+        breakdown = DecimalMathEngine.calculate_currency_breakdown([clean_tx, norm_tx])
+
+        # Total is $100.00, transaction count is 1 (excluding None)
+        self.assertEqual(breakdown["USD"]["total_amount"], Decimal("100.00"))
+        self.assertEqual(breakdown["USD"]["transaction_count"], 1)
+
+    def test_legitimate_zero_dollar_amount_is_decimal_zero_and_included(self):
+        """An explicit $0.00 amount (e.g. promotional item, free trial) is Decimal('0.00') and distinct from None."""
+        raw_tx = RawExtractedTransaction(
+            vendor="Free Trial SaaS",
+            date_str="2026-08-01",
+            amount_str="$0.00",
+            currency_str="USD",
+            category="Software_Cloud"
+        )
+        norm_tx = ExpenseNormalizer.normalize_transaction(raw_tx, source_file="promo.txt")
+
+        self.assertIsNotNone(norm_tx.amount)
+        self.assertEqual(norm_tx.amount, Decimal("0.00"))
+        self.assertEqual(norm_tx.status, ExtractionStatus.EXTRACTED)
+
+        # In arithmetic, $0.00 is a valid transaction and contributes to count
+        clean_tx = NormalizedTransaction(
+            transaction_id="1", source_file="doc", vendor="AWS", date="2026-08-01",
+            amount=Decimal("100.00"), currency="USD", category="Software_Cloud", status=ExtractionStatus.EXTRACTED
+        )
+        breakdown = DecimalMathEngine.calculate_currency_breakdown([clean_tx, norm_tx])
+
+        # Total is $100.00, count is 2, average is (100.00 / 2) = $50.00
+        self.assertEqual(breakdown["USD"]["total_amount"], Decimal("100.00"))
+        self.assertEqual(breakdown["USD"]["transaction_count"], 2)
+        self.assertEqual(breakdown["USD"]["average_transaction"], Decimal("50.00"))
+
 if __name__ == "__main__":
     unittest.main()

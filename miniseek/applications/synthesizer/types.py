@@ -54,15 +54,15 @@ class RawExtractedTransaction:
 
 @dataclass
 class NormalizedTransaction:
-    """Clean, validated transaction with exact Decimal arithmetic representation."""
+    """Clean, validated transaction with exact Decimal arithmetic representation (or None for unreadable amounts)."""
     transaction_id: str
     source_file: str
     vendor: str
-    date: Optional[str]  # ISO format "YYYY-MM-DD" or None if AMBIGUOUS/UNKNOWN
-    amount: Decimal      # Exact Python Decimal, never float
-    currency: str        # ISO 4217 code e.g. "INR", "USD", "EUR"
-    category: str
-    status: ExtractionStatus
+    date: Optional[str]               # ISO format "YYYY-MM-DD" or None if AMBIGUOUS/UNKNOWN
+    amount: Optional[Decimal] = None  # Exact Python Decimal, or None if unreadable/missing (never silently converted to 0.00)
+    currency: str = "UNKNOWN"         # ISO 4217 code e.g. "INR", "USD", "EUR", "UNKNOWN"
+    category: str = "UNCATEGORIZED"
+    status: ExtractionStatus = ExtractionStatus.EXTRACTED
     provenance: Dict[str, FieldProvenance] = field(default_factory=dict)
     is_duplicate_candidate: bool = False
     duplicate_reason: Optional[str] = None
@@ -73,7 +73,7 @@ class NormalizedTransaction:
             "source_file": self.source_file,
             "vendor": self.vendor,
             "date": self.date,
-            "amount": str(self.amount),
+            "amount": str(self.amount) if self.amount is not None else None,
             "currency": self.currency,
             "category": self.category,
             "status": self.status.value,
