@@ -24,7 +24,7 @@
   * RAM footprint: **~1.8 GB RAM** during inference
   * Inference speed: **~45 - 55 tokens/second**
 * **Code Architecture**: Pure Python 3.12 standard library (zero LangChain/AutoGen/CrewAI bloat)
-* **Testing Suite**: 43 automated unit tests running in **0.068s** (100% pass rate)
+* **Testing Suite**: 68 automated unit tests running in **0.230s** (100% pass rate)
 
 ---
 
@@ -170,4 +170,75 @@
 > #AIAgents #SoftwareEngineering #Python #LocalAI #SystemDesign #OpenSource #DevCommunity
 
 ---
+
+## 🧪 Milestone 4 — Multi-Run History & Safe Undo
+
+### Key Discoveries
+
+1. **Conservative Undo is Non-Trivial**: The fundamental invariant — *"Never overwrite newer user data merely to undo itself"* — requires checking destination integrity (SHA-256 + size), original-path occupancy, and per-operation conflict resolution. A naive "just move it back" approach would be destructive.
+
+2. **Reverse-Order Undo is Essential**: When 3 files were moved (A, B, C), undoing in forward order risks partial state inconsistency. Reversing the operation order (C, B, A) maintains the inverse of the original transaction sequence.
+
+3. **Undo State is Distinct from Execution State**: Each operation now carries both an execution status (`COMPLETED`, `FAILED`) AND an undo status (`UNDONE`, `CONFLICT`, `NOT_APPLICABLE`). Run-level status similarly distinguishes `COMMITTED` from `UNDONE` vs `UNDO_PARTIAL`. This separation enables precise audit trails.
+
+4. **Incremental Undo Persistence**: Just as execution persists manifest state after each operation, undo does the same. If the process crashes after undoing 2 of 3 operations, the manifest on disk still reflects exactly what was reverted.
+
+5. **SHA-256 as Identity Guard, Not as Object Identity**: Two different files can legitimately have identical content. The undo logic uses `(path + sha256 + size)` as the identity check, not SHA-256 alone. This avoids the "same hash = same file" trap.
+
+6. **Multi-Run Independence**: Each run is a self-contained manifest. Undoing run A has zero effect on run B's files. This was validated with cross-run isolation tests.
+
+### Milestone 4 Test Coverage (20 new tests)
+
+| Category | Tests | Scenarios |
+|---|---|---|
+| **History Manager** | 8 | Empty history, multiple runs, run lookup, nonexistent run, render output, plan→run traceability, run vs operation status separation |
+| **Normal Undo** | 2 | Single-file restore, 3-file reverse-order restore |
+| **Conflict Detection** | 4 | Destination modified by user, destination deleted, original path occupied, same-size SHA mismatch |
+| **Multi-Run** | 1 | Undo run A without affecting run B |
+| **Partial/Failed Undo** | 3 | Mixed conflicts (partial undo), durable state after conflict, durable state after success |
+| **Edge Cases** | 2 | Failed operations as NOT_APPLICABLE, ineligible run status rejection |
+
+### Architecture After Milestone 4
+
+```text
+Model → Proposal → Validation → Frozen Plan → User Approval
+    → Python-only Execution → Per-Op Verification → Durable Manifest
+    → History Index → Safe Targeted Undo (miniseek undo <run-id>)
+        → Integrity Verification → Conflict Detection → Reverse-Order Restore
+        → Incremental State Persistence
+```
+
+### LinkedIn Post Draft 3: Safe Undo
+
+> 🧠 **Building MiniSeek: When Your AI Agent Needs to Say "I'm Sorry"**
+>
+> Today I shipped safe undo for MiniSeek — a file-organizing AI agent running on an 8 GB M1 Mac with a 1.5B parameter model.
+>
+> The hard part wasn't building undo. It was building *conservative* undo.
+>
+> 🔹 **The Core Rule:** MiniSeek never overwrites newer user data merely to undo itself.
+>
+> Here's what that means in practice:
+>
+> Before reversing any file move, MiniSeek checks:
+> • Is the destination file unchanged? (SHA-256 + size verification)
+> • Is the original path occupied by something else?
+> • Would restoring this file overwrite user work?
+>
+> If ANY check fails → the operation becomes a CONFLICT, not a forced rollback.
+>
+> 🔹 **Reverse-Order Execution:** If MiniSeek moved files A → B → C, undo processes C → B → A. The inverse of the original sequence.
+>
+> 🔹 **Crash-Safe State:** Undo state is persisted to disk after each operation. If the process dies after undoing 2 of 3 files, the manifest accurately records what was reverted.
+>
+> 🔹 **Multi-Run Independence:** Each organizing run gets its own manifest. `miniseek undo run-001` touches only run-001's files. Run-002 is completely unaffected.
+>
+> The test results: 68 tests, 100% pass rate, all scenarios covered — normal undo, user modifications, deleted destinations, occupied paths, partial failures, crash recovery.
+>
+> 💡 **The Insight:** Safety isn't just about preventing bad moves forward. It's about preventing bad moves backward too. An "undo" that silently overwrites user work is worse than no undo at all.
+>
+> #AIAgents #SoftwareEngineering #Python #LocalAI #SystemDesign #OpenSource
+
+---
 *Auto-updated by MiniSeek Laboratory Logger.*
+
