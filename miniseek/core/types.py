@@ -24,6 +24,20 @@ class OperationStatus:
     BLOCKED = "BLOCKED"
     ROLLED_BACK = "ROLLED_BACK"
 
+class UndoStatus:
+    """Per-operation undo state machine."""
+    PENDING = "UNDO_PENDING"
+    UNDONE = "UNDONE"
+    CONFLICT = "CONFLICT"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+class RunUndoStatus:
+    """Run-level undo state machine: COMMITTED -> UNDOING -> UNDONE."""
+    UNDOING = "UNDOING"
+    UNDONE = "UNDONE"
+    UNDO_PARTIAL = "UNDO_PARTIAL"
+    UNDO_FAILED = "UNDO_FAILED"
+
 @dataclass
 class FileInfo:
     """Metadata for a scanned file."""
@@ -205,7 +219,7 @@ class ExecutionResult:
 
 @dataclass
 class OperationRecord:
-    """Record of an executed filesystem operation."""
+    """Record of an executed filesystem operation, with undo tracking."""
     op_id: int
     type: str  # "MOVE"
     source_original: str
@@ -214,6 +228,8 @@ class OperationRecord:
     size_bytes: int
     mtime: float
     status: str = "COMPLETED"
+    undo_status: Optional[str] = None
+    undo_error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -238,4 +254,28 @@ class RunManifest:
             "root_path": self.root_path,
             "status": self.status,
             "operations": [op.to_dict() for op in self.operations]
+        }
+
+@dataclass
+class UndoResult:
+    """Outcome of a safe undo operation on a specific run."""
+    run_id: str
+    status: str  # RunUndoStatus values
+    operations_total: int
+    operations_undone: int
+    operations_conflict: int
+    operations_not_applicable: int
+    conflict_details: List[Dict[str, Any]] = field(default_factory=list)
+    error_message: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "run_id": self.run_id,
+            "status": self.status,
+            "operations_total": self.operations_total,
+            "operations_undone": self.operations_undone,
+            "operations_conflict": self.operations_conflict,
+            "operations_not_applicable": self.operations_not_applicable,
+            "conflict_details": self.conflict_details,
+            "error_message": self.error_message
         }
