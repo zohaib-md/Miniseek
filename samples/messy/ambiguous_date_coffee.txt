@@ -1,0 +1,8 @@
+Blue Bottle Coffee Co.
+Date: 05/06/2026
+1x Gibraltar Espresso - $4.50
+1x Avocado Toast - $7.00
+Total Amount: USD $11.50
+Tip: $2.00
+Final Charged: USD $13.50
+*Note: Date is 05/06/2026 (Ambiguous May 6 vs June 5)*

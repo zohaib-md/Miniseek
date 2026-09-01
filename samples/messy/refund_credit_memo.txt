@@ -1,0 +1,8 @@
+Amazon.com Services LLC
+Credit Memo / Return Confirmation
+Order Date: 2026-08-10
+Refund Date: 2026-08-19
+Item Returned: USB-C to DisplayPort Cable (Defective)
+Refund Amount: -USD $35.00
+Original Payment Refunded to Visa ending in 4128
+Status: Refund Complete

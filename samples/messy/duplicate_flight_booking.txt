@@ -1,0 +1,9 @@
+Delta Air Lines Electronic Ticket Receipt
+Ticket Number: 0062489100112
+Issue Date: 2026-08-10
+Passenger: Lead Engineer
+Flight: DL412 (SFO -> JFK)
+Flight Date: 2026-08-10
+Airfare Total: USD $450.00
+Payment Method: Corporate Amex **** 3001
+*Note: This transaction appears also in corporate_card_transactions.csv*

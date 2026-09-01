@@ -1,0 +1,11 @@
+Uber Eats Receipt
+Order #UE-98214
+Date: 2026-08-12
+Merchant: Green Bowl Cafe
+Items:
+1x Quinoa Protein Bowl - $18.50
+1x Fresh Citrus Lemonade - $4.00
+Subtotal: $22.50
+Tax & Courier Tip: $4.25
+Total Paid: USD $26.75
+Payment: Visa **** 4128

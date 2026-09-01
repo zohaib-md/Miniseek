@@ -1,0 +1,6 @@
+Transaction_Date,Description,Category,Amount,Currency,Account
+2026-08-01,Amazon Web Services,Cloud Hosting,142.50,USD,Corp_Card_3001
+2026-08-10,Delta Air Lines Flight DL412,Travel,450.00,USD,Corp_Card_3001
+2026-08-12,Green Bowl Cafe (Uber Eats),Dining,26.75,USD,Corp_Card_3001
+2026-08-15,Starbucks Store 1184,Dining,10.00,USD,Corp_Card_3001
+2026-08-18,Apple Store R104,Hardware,69.00,USD,Corp_Card_3001

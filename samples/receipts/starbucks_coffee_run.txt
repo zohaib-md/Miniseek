@@ -1,0 +1,8 @@
+Starbucks Coffee Store # 1184
+Date: August 15, 2026
+1x Caffe Latte (Venti) - $5.45
+1x Blueberry Scone - $3.75
+Subtotal: $9.20
+Tax: $0.80
+Total: USD $10.00
+Card: Apple Pay **** 1029

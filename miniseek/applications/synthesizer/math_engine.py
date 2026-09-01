@@ -18,10 +18,11 @@ class ExpenseNormalizer:
     - Normalizes dates to ISO 8601 with explicit ambiguity detection.
     """
 
+    # Explicit mapping for unambiguous currency identifiers
     CURRENCY_SYMBOL_MAP: Dict[str, str] = {
-        "$": "USD",
         "usd": "USD",
         "us$": "USD",
+        "u.s.d.": "USD",
         "₹": "INR",
         "rs": "INR",
         "rs.": "INR",
@@ -35,30 +36,46 @@ class ExpenseNormalizer:
         "aud": "AUD",
         "a$": "AUD",
         "jpy": "JPY",
-        "¥": "JPY"
+        "¥": "JPY",
+        "chf": "CHF"
     }
 
     @classmethod
     def parse_amount(cls, raw_amount: Optional[str]) -> Tuple[Optional[Decimal], Optional[str]]:
         """
         Extracts and converts raw amount text into an exact Python Decimal.
-        Handles $45.50, ₹1,249.00, 1.249,50 EUR, etc.
+        Supports standard positive purchases, refunds (-$35.00), accounting parenthetical
+        negatives (($35.00)), and credit memos (35.00 CR / Refund).
+        Conservative on currency: standalone '$' with no USD/CAD/AUD context returns 'UNKNOWN'.
         Returns (Decimal, detected_currency_symbol) or (None, None).
         """
         if not raw_amount:
             return None, None
 
         text = raw_amount.strip()
+        text_lower = text.lower()
         detected_curr = None
 
-        # Check for currency symbols in the text
+        # Check for unambiguous currency symbols/codes
         for symbol, code in cls.CURRENCY_SYMBOL_MAP.items():
-            if symbol in text.lower():
+            if symbol in text_lower:
                 detected_curr = code
                 break
 
-        # Remove currency symbols and non-numeric/punctuation characters
-        cleaned = re.sub(r"[^\d,\.\-]", "", text).strip()
+        # If only ambiguous '$' is present without country code
+        if detected_curr is None and "$" in text:
+            detected_curr = "UNKNOWN"
+
+        # Detect negative sign or accounting negative / refund indicator
+        # e.g., -$35.00, ($35.00), 35.00 CR, Refund: $35.00
+        is_negative = False
+        if "-" in text or re.search(r"[\(\[\{]\s*[\$₹€£]?\s*[\d\.,]+\s*[\)\]\}]", text):
+            is_negative = True
+        elif re.search(r"\b(refund|credit|reversal|chargeback|cr)\b", text_lower):
+            is_negative = True
+
+        # Remove currency symbols, letters, parentheses, and noise
+        cleaned = re.sub(r"[^\d,\.]", "", text).strip()
         if not cleaned:
             return None, detected_curr
 
@@ -82,20 +99,33 @@ class ExpenseNormalizer:
 
         try:
             val = Decimal(cleaned).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            if val < 0:
-                # Negative amount or refund
-                return val, detected_curr
+            if is_negative and val > 0:
+                val = -val
             return val, detected_curr
         except InvalidOperation:
             return None, detected_curr
 
     @classmethod
-    def normalize_currency(cls, raw_currency: Optional[str], fallback: str = "USD") -> str:
-        """Normalizes raw currency string to ISO 4217 code."""
+    def normalize_currency(cls, raw_currency: Optional[str], fallback: str = "UNKNOWN") -> str:
+        """
+        Conservative currency normalizer.
+        - ₹ / INR -> INR
+        - € / EUR -> EUR
+        - £ / GBP -> GBP
+        - USD / US$ -> USD
+        - CAD / C$ -> CAD
+        - JPY / ¥ -> JPY
+        - Ambiguous '$' with no locale context -> UNKNOWN (never assumes USD)
+        """
         if not raw_currency:
             return fallback
 
         norm = raw_currency.strip().lower()
+
+        # Handle standalone ambiguous dollar sign
+        if norm == "$":
+            return "UNKNOWN"
+
         if norm in cls.CURRENCY_SYMBOL_MAP:
             return cls.CURRENCY_SYMBOL_MAP[norm]
 

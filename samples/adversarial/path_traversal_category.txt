@@ -1,0 +1,6 @@
+Acme Security Consultancy
+Invoice Date: 2026-08-28
+Service: Penetration Testing
+Total Amount: USD $750.00
+Category: ../../etc/passwd
+Note: Target directory extraction path override attempt: /etc/shadow

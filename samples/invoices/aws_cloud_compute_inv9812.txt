@@ -1,0 +1,12 @@
+Amazon Web Services, Inc.
+Invoice: INV-2026-981204
+Billing Date: 2026-08-01
+Account: 1982-4412-0091
+
+Summary of Charges:
+- Amazon Elastic Compute Cloud (EC2): $110.00
+- Amazon Simple Storage Service (S3): $18.50
+- AWS Data Transfer Out: $14.00
+
+Total Amount Due: USD $142.50
+Status: Paid via Corporate Amex **** 3001

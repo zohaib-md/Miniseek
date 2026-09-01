@@ -13,10 +13,34 @@ from miniseek.applications.synthesizer.math_engine import (
 
 class TestMathEngine(unittest.TestCase):
 
-    def test_amount_normalization_standard_us(self):
-        dec, curr = ExpenseNormalizer.parse_amount("$1,249.50")
+    def test_amount_normalization_explicit_us_dollars(self):
+        dec, curr = ExpenseNormalizer.parse_amount("USD $1,249.50")
         self.assertEqual(dec, Decimal("1249.50"))
         self.assertEqual(curr, "USD")
+
+    def test_amount_normalization_standalone_dollar_is_unknown(self):
+        """Bare '$' with no country context must yield UNKNOWN, never silently assuming USD."""
+        dec, curr = ExpenseNormalizer.parse_amount("$1,249.50")
+        self.assertEqual(dec, Decimal("1249.50"))
+        self.assertEqual(curr, "UNKNOWN")
+
+    def test_currency_normalization_conservatism(self):
+        """Verify strict currency normalization mapping and unknown dollar behavior."""
+        self.assertEqual(ExpenseNormalizer.normalize_currency("₹"), "INR")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("INR"), "INR")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("Rs."), "INR")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("€"), "EUR")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("EUR"), "EUR")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("£"), "GBP")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("GBP"), "GBP")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("USD"), "USD")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("US$"), "USD")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("CAD"), "CAD")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("C$"), "CAD")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("JPY"), "JPY")
+        self.assertEqual(ExpenseNormalizer.normalize_currency("¥"), "JPY")
+        # Standalone dollar with no context -> UNKNOWN
+        self.assertEqual(ExpenseNormalizer.normalize_currency("$"), "UNKNOWN")
 
     def test_amount_normalization_indian_rupees(self):
         dec, curr = ExpenseNormalizer.parse_amount("₹ 45,200.00")
@@ -27,6 +51,24 @@ class TestMathEngine(unittest.TestCase):
         dec, curr = ExpenseNormalizer.parse_amount("1.249,50 €")
         self.assertEqual(dec, Decimal("1249.50"))
         self.assertEqual(curr, "EUR")
+
+    def test_amount_normalization_negative_and_refund_formats(self):
+        """Supports negative sign, accounting parentheses, and credit memo keywords."""
+        # 1. Negative sign: -$35.50
+        dec1, _ = ExpenseNormalizer.parse_amount("-$35.50")
+        self.assertEqual(dec1, Decimal("-35.50"))
+
+        # 2. Accounting parenthetical notation: ($120.00)
+        dec2, _ = ExpenseNormalizer.parse_amount("($120.00)")
+        self.assertEqual(dec2, Decimal("-120.00"))
+
+        # 3. Credit memo keyword: 45.00 CR
+        dec3, _ = ExpenseNormalizer.parse_amount("45.00 CR")
+        self.assertEqual(dec3, Decimal("-45.00"))
+
+        # 4. Refund keyword: Refund $15.25
+        dec4, _ = ExpenseNormalizer.parse_amount("Refund $15.25")
+        self.assertEqual(dec4, Decimal("-15.25"))
 
     def test_amount_normalization_empty_or_malformed(self):
         dec, curr = ExpenseNormalizer.parse_amount("N/A")
