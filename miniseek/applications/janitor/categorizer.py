@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, Tuple, List
 
 from miniseek.core.types import FileInfo, ScanResult
 from miniseek.core.config import Config, DEFAULT_CONFIG
-from miniseek.core.security import PathSecurity
+from miniseek.core.security import PathSecurity, SecurityError
 from miniseek.llm import LLMProvider
 from miniseek.harness.validation import CategorizationValidator, ValidationResult
 
@@ -160,8 +160,15 @@ Respond ONLY with this JSON structure:
         # Step 4: Deterministic Python Destination Derivation (Never from model)
         dest_path = None
         if root_dir is not None:
-            dest_path_obj = self.get_destination_path(root_dir, file_info.name, final_category)
-            dest_path = str(dest_path_obj) if dest_path_obj is not None else None
+            try:
+                dest_path_obj = self.get_destination_path(root_dir, file_info.name, final_category)
+                dest_path = str(dest_path_obj) if dest_path_obj is not None else None
+            except SecurityError as sec_err:
+                dest_path = None
+                final_category = "NEEDS_REVIEW"
+                semantic_status = SemanticStatus.INVALID
+                is_valid = False
+                validation_err = f"[safety] Path security violation for filename '{file_info.name}': {sec_err}"
 
         telemetry = CategorizationTelemetry(
             file_name=file_info.name,

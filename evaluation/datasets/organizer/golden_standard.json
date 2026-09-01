@@ -1,0 +1,218 @@
+[
+  {
+    "id": "doc_001",
+    "name": "quarterly_earnings_report_2024.pdf",
+    "extension": ".pdf",
+    "size_bytes": 1048576,
+    "preview": "Q3 2024 Financial Summary: Total revenue grew by 14% year-over-year to $42.5M. Operating margins expanded by 210 bps.",
+    "ground_truth_category": "Documents",
+    "description": "Financial PDF report"
+  },
+  {
+    "id": "doc_002",
+    "name": "employee_handbook_v4.docx",
+    "extension": ".docx",
+    "size_bytes": 524288,
+    "preview": "Company Code of Conduct and Operating Guidelines. Section 1: Workplace safety, remote work policies, and standard procedures.",
+    "ground_truth_category": "Documents",
+    "description": "Word document handbook"
+  },
+  {
+    "id": "doc_003",
+    "name": "project_architecture_spec.md",
+    "extension": ".md",
+    "size_bytes": 8192,
+    "preview": "# System Architecture Specification\nThis document describes the event-driven microservices architecture and API contracts.",
+    "ground_truth_category": "Documents",
+    "description": "Markdown documentation"
+  },
+  {
+    "id": "doc_004",
+    "name": "meeting_notes_august_2026.txt",
+    "extension": ".txt",
+    "size_bytes": 2048,
+    "preview": "Meeting Notes - Aug 28, 2026\nAttendees: Sarah, Alex, Dev team.\nAction items: Complete security audit, finalize test plan.",
+    "ground_truth_category": "Documents",
+    "description": "Plain text meeting notes"
+  },
+  {
+    "id": "rec_001",
+    "name": "aws_invoice_inv98321.pdf",
+    "extension": ".pdf",
+    "size_bytes": 142800,
+    "preview": "Amazon Web Services Invoice\nInvoice Number: INV-98321\nAmount Due: $1,420.50 USD\nBilling Period: 08/01/2026 - 08/31/2026",
+    "ground_truth_category": "Receipts_Invoices",
+    "description": "Cloud provider invoice"
+  },
+  {
+    "id": "rec_002",
+    "name": "uber_eats_receipt_lunch.pdf",
+    "extension": ".pdf",
+    "size_bytes": 85000,
+    "preview": "Uber Eats Receipt\nOrder total: $24.85\nPayment method: Visa ending in 4128\nDate: Aug 15, 2026\nMerchant: Green Bowl Cafe",
+    "ground_truth_category": "Receipts_Invoices",
+    "description": "Meal delivery receipt"
+  },
+  {
+    "id": "rec_003",
+    "name": "hotel_stay_folio_hilton.pdf",
+    "extension": ".pdf",
+    "size_bytes": 210000,
+    "preview": "Hilton Garden Inn - Guest Folio\nRoom 412: 3 nights @ $189.00/night\nTaxes & Fees: $78.40\nTotal Balance Paid: $645.40",
+    "ground_truth_category": "Receipts_Invoices",
+    "description": "Hotel accommodation folio"
+  },
+  {
+    "id": "rec_004",
+    "name": "receipt_apple_store_hardware.txt",
+    "extension": ".txt",
+    "size_bytes": 1200,
+    "preview": "Apple Store Receipt\nItem: USB-C Power Adapter 70W\nPrice: $59.00\nSales Tax: $4.87\nTotal: $63.87\nCard: **** 9012",
+    "ground_truth_category": "Receipts_Invoices",
+    "description": "Plain text electronic hardware receipt"
+  },
+  {
+    "id": "med_001",
+    "name": "family_vacation_sunset.jpg",
+    "extension": ".jpg",
+    "size_bytes": 3450000,
+    "preview": "(Binary image data: JPEG image 4032x3024)",
+    "ground_truth_category": "Media_Images",
+    "description": "JPEG photograph"
+  },
+  {
+    "id": "med_002",
+    "name": "app_dashboard_wireframe.png",
+    "extension": ".png",
+    "size_bytes": 890000,
+    "preview": "(Binary image data: PNG image 1920x1080 with alpha transparency)",
+    "ground_truth_category": "Media_Images",
+    "description": "PNG screenshot/wireframe"
+  },
+  {
+    "id": "med_003",
+    "name": "company_vector_logo.svg",
+    "extension": ".svg",
+    "size_bytes": 45000,
+    "preview": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><path d=\"M10 10 H 90 V 90 H 10 L 10 10\" fill=\"#0066cc\"/></svg>",
+    "ground_truth_category": "Media_Images",
+    "description": "SVG vector graphic"
+  },
+  {
+    "id": "med_004",
+    "name": "product_demo_recording.mp4",
+    "extension": ".mp4",
+    "size_bytes": 25000000,
+    "preview": "(Binary video data: H.264 video stream 1080p, AAC audio)",
+    "ground_truth_category": "Media_Images",
+    "description": "MP4 video recording"
+  },
+  {
+    "id": "code_001",
+    "name": "transaction_manager.py",
+    "extension": ".py",
+    "size_bytes": 9400,
+    "preview": "import os\nimport shutil\nfrom typing import Dict, List\n\nclass TransactionManager:\n    def commit(self) -> bool:\n        return True",
+    "ground_truth_category": "Code",
+    "description": "Python source code file"
+  },
+  {
+    "id": "code_002",
+    "name": "app_navigation_component.tsx",
+    "extension": ".tsx",
+    "size_bytes": 4300,
+    "preview": "import React, { useState } from 'react';\nexport const Navigation = () => {\n  const [isOpen, setIsOpen] = useState(false);\n  return <nav />;\n};",
+    "ground_truth_category": "Code",
+    "description": "TypeScript React component"
+  },
+  {
+    "id": "code_003",
+    "name": "database_migration_v2.sql",
+    "extension": ".sql",
+    "size_bytes": 3100,
+    "preview": "CREATE TABLE user_accounts (\n    id SERIAL PRIMARY KEY,\n    email VARCHAR(255) NOT NULL UNIQUE,\n    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);",
+    "ground_truth_category": "Code",
+    "description": "SQL schema migration script"
+  },
+  {
+    "id": "code_004",
+    "name": "main_engine.rs",
+    "extension": ".rs",
+    "size_bytes": 12500,
+    "preview": "use std::path::PathBuf;\n\npub struct Scanner {\n    root: PathBuf,\n}\n\nimpl Scanner {\n    pub fn new(root: PathBuf) -> Self { Scanner { root } }\n}",
+    "ground_truth_category": "Code",
+    "description": "Rust source code file"
+  },
+  {
+    "id": "arc_001",
+    "name": "backup_database_dump_2026.tar.gz",
+    "extension": ".gz",
+    "size_bytes": 45000000,
+    "preview": "(Binary archive data: Gzip compressed tar archive)",
+    "ground_truth_category": "Archives_Data",
+    "description": "Compressed tarball database backup"
+  },
+  {
+    "id": "arc_002",
+    "name": "census_demographics_2020.csv",
+    "extension": ".csv",
+    "size_bytes": 5600000,
+    "preview": "region_id,state,county,population,median_income,growth_rate\n101,California,Los Angeles,9829544,71358,0.012\n102,California,Orange,3186989,94441,0.018",
+    "ground_truth_category": "Archives_Data",
+    "description": "Large tabular CSV dataset"
+  },
+  {
+    "id": "arc_003",
+    "name": "project_source_archive_release.zip",
+    "extension": ".zip",
+    "size_bytes": 18000000,
+    "preview": "(Binary archive data: PKZip standard compression archive)",
+    "ground_truth_category": "Archives_Data",
+    "description": "ZIP file archive"
+  },
+  {
+    "id": "arc_004",
+    "name": "export_customer_data.json",
+    "extension": ".json",
+    "size_bytes": 2200000,
+    "preview": "[\n  {\"customer_id\": \"C001\", \"name\": \"Acme Corp\", \"total_spend\": 14500.00},\n  {\"customer_id\": \"C002\", \"name\": \"Beta LLC\", \"total_spend\": 8900.50}\n]",
+    "ground_truth_category": "Archives_Data",
+    "description": "JSON structured data export"
+  },
+  {
+    "id": "unc_001",
+    "name": "device_firmware_blob.bin",
+    "extension": ".bin",
+    "size_bytes": 65536,
+    "preview": "ELF binary firmware blob (ARM64 executable image header)",
+    "ground_truth_category": "UNCATEGORIZED",
+    "description": "Unrecognized firmware binary blob"
+  },
+  {
+    "id": "unc_002",
+    "name": "cache_temp_buffer_99a",
+    "extension": "",
+    "size_bytes": 4096,
+    "preview": "Raw binary cache buffer bytes (non-text payload)",
+    "ground_truth_category": "UNCATEGORIZED",
+    "description": "Extensionless arbitrary binary cache"
+  },
+  {
+    "id": "rev_001",
+    "name": "receipt_or_python_script_unknown.txt",
+    "extension": ".txt",
+    "size_bytes": 850,
+    "preview": "# Receipt calculation script\n# Total: $450.00\ndef print_invoice():\n    print('Invoice Total: $450 paid to vendor')",
+    "ground_truth_category": "NEEDS_REVIEW",
+    "description": "Ambiguous hybrid code vs receipt text"
+  },
+  {
+    "id": "rev_002",
+    "name": "untitled_scratch_draft.tmp",
+    "extension": ".tmp",
+    "size_bytes": 12,
+    "preview": "?? ... TODO",
+    "ground_truth_category": "NEEDS_REVIEW",
+    "description": "Extremely vague scratch file requiring human review"
+  }
+]
