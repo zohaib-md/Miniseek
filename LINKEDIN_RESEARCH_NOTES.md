@@ -514,9 +514,21 @@ Model → Proposal → Validation → Frozen Plan → User Approval
 * **Generation drives 90%+ of edge latency**: Generating output JSON tokens consumed **417.1s (91.8% of runtime)**.
 * **The Micro-Task Speedup**: Local 1.5B models generate faster (22.1 vs 18.2 tok/s) when KV caches remain compact. On long ledgers, 27 micro-calls ran **64.5 seconds faster** than 1 giant call.
 
-#### 5. Core Takeaway
-> **Task decomposition via deterministic pre-segmentation is a significantly stronger lever for multi-item completeness than expanding context window size.**
-> Small models do not fail because they cannot see the document; they fail when prompted to generate massive, high-cardinality JSON outputs in a single autoregressive pass.
+#### 5. Core Conclusions & Architectural Insights
+1. **Granularity Lever vs. Context Size**:
+   > *"In the tested dense-document cases, increasing context size did not solve high-cardinality extraction, while deterministic pre-segmentation eliminated the observed missing-item behaviour. The results are consistent with long high-cardinality generation being a major failure mode."*
+   *(Note: The experiment changes multiple factors when moving from single-shot to segmented extraction, so this is preserved as an empirical observation rather than a causal proof.)*
+
+2. **The Two-Path Segmentation Rule (Tabular vs Hierarchical)**:
+   The hotel folio and consulting invoice results demonstrated that naive row-level splitting can destroy document-level hierarchy (extracting individual room fees or hours instead of invoice totals). Therefore, we establish an explicit architectural distinction:
+   ```text
+   Structured / tabular documents (CSV, multi-row expense logs)
+   → deterministic row/item segmentation
+   
+   Hierarchical documents (invoices, hotel folios, summaries)
+   → preserve document context
+   → separate line-item extraction from document-level totals/relationships
+   ```
 
 ---
 
