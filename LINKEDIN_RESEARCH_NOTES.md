@@ -375,94 +375,109 @@ Model → Proposal → Validation → Frozen Plan → User Approval
 >
 > ---
 
-## 🔬 Experiment EXP-001: Context Budget Evaluation (Pilot)
+## 🔬 Experiment EXP-001: Context Budget Evaluation
 
-### 1. Research Question
-> **"How does changing the available semantic context (250 vs 500 vs 750 vs 1000 tokens) affect extraction quality, model-call efficiency, and latency for a 1.5B local model on an 8 GB M1 Mac?"**
+### Stage 1: EXP-001a — Initial Pilot & Corpus Stress Test
+* **Setup**: 20 documents, 4 budgets (250, 500, 750, 1000 tokens), 3 condition-rotated repetitions (240 runs).
+* **Critical Finding / Benchmark Limitation**:
+  - The longest document in the initial corpus was 415 characters (~118 tokens).
+  - The smallest budget threshold (250 tokens $\times 3.5$) was 875 characters.
+  - **Result**: Every document fit inside a single chunk across all 4 conditions (`chunks/doc = 1.0`, `coverage = 100%`).
+  - **Lesson**: The independent variable was never meaningfully exercised; the observed variance across conditions was runtime inference noise, not a context-scaling effect.
 
-### 2. Hypotheses
-* **$H_1$ (Chunk Count vs Completeness Trade-off)**: Smaller context budgets will require more chunks per document and may reduce document-level completeness on longer/multi-item inputs.
-* **$H_2$ (Latency vs Call-Efficiency Trade-off)**: At 1000 target tokens, per-chunk latency will increase, but the total number of model calls per document will decrease for long documents.
-* **$H_3$ (Trade-Off Discovery)**: One of the tested context budgets will provide the best empirical balance between extraction accuracy, total document processing latency, and model-call efficiency.
+---
 
-### 3. Setup & Controls
+### Stage 2: EXP-001b — Corrected Multi-Tier Corpus Evaluation
+
+#### 1. Research Question
+> **"How does changing the available semantic context (250 vs 500 vs 750 vs 1000 target tokens) affect extraction quality, model-call efficiency, and latency for a 1.5B local model on an 8 GB M1 Mac when document sizes actively cross chunk boundaries?"**
+
+#### 2. Experimental Controls & Setup
 * **Machine**: Apple M1 MacBook Air (8 GB Unified Memory)
-* **Model**: `Qwen 2.5 (1.5B, Q4_K_M)` via Ollama HTTP API (temp=0.0)
-* **Corpus**: Fixed 20-document frozen benchmark corpus (`doc_001` to `doc_020`)
-* **Conditions**: 4 budgets ($250, 500, 750, 1000$ target tokens)
-* **Repetitions**: 3 condition-rotated runs (Run 1: ascending, Run 2: descending, Run 3: rotated)
-* **Total Evaluations**: 240 document extractions
+* **Model**: `Qwen 2.5 (1.5B, Q4_K_M)` via local Ollama HTTP API (temp=0.0, top_p=1.0)
+* **Fixed Prompt Overhead**: ~366 tokens (constant across all conditions)
+* **Corpus**: Fixed 20-document redesigned corpus spanning 7 length tiers (96 chars to 5,164 chars).
+  - 11 of 20 documents produce different chunk counts across conditions.
+* **Chunk Reconstruction Mechanism**: Mechanism C (independent chunk extraction with `list.extend` concatenation; no second-pass reconciliation).
+* **Evaluations**: 4 budgets $\times$ 20 documents $\times$ 3 rotated repetitions = **240 document evaluations**.
 
-### 4. Empirical Results
+#### 3. Empirical Results
 
-| Target Budget | Overall Success (%) | Fully Correct (%) | Partial (%) | Incorrect (%) | First-Pass Validity (%) | Model Calls | Mean Latency (ms) | Peak Python RAM |
+| Target Budget | Overall Success (%) | Fully Correct (%) | Partial (%) | Incorrect (%) | First-Pass Validity (%) | Model Calls | Mean Chunk Latency | Mean Total Doc Latency | Peak RAM |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **250 tokens** | **13.3%** | 8.3% | 63.3% | 23.3% | **100.0%** | 60 | 2,910 ms | 28.7 MB |
-| **500 tokens** | **13.3%** | 10.0% | 68.3% | 18.3% | **100.0%** | 60 | 2,609 ms | 28.7 MB |
-| **750 tokens** | **21.7%** | **18.3%** | 60.0% | 18.3% | **100.0%** | 60 | 2,505 ms | 28.7 MB |
-| **1000 tokens** | **11.7%** | 8.3% | 65.0% | 23.3% | **100.0%** | 60 | 2,593 ms | 28.7 MB |
+| **250 tokens** | 5.0% | 1.7% | 68.3% | 26.7% | 96.7% | 143 | 12.6s | 29.7s | 29.6 MB |
+| **500 tokens** | 3.3% | 1.7% | 68.3% | 28.3% | **100.0%** | 87 | 15.2s | **22.1s** | 29.6 MB |
+| **750 tokens** | 5.0% | 5.0% | 56.7% | 38.3% | 98.3% | 73 | 20.6s | 24.7s | 29.6 MB |
+| **1000 tokens** | **11.7%** | 3.3% | 58.3% | 30.0% | 96.7% | **68** | 30.1s | 33.1s | 29.6 MB |
 
-#### Field-Level Extraction Accuracy:
+#### 4. Model Call Efficiency & Chunk Distribution
+
+| Target Budget | Multi-Chunk Docs | Mean Chunks / Doc | Total Invocations | Reduction vs 250t |
+| :---: | :---: | :---: | :---: | :---: |
+| **250 tokens** | 33 / 60 (55.0%) | 2.35 | 143 | Baseline |
+| **500 tokens** | 21 / 60 (35.0%) | 1.45 | 87 | **-39.2%** |
+| **750 tokens** | 12 / 60 (20.0%) | 1.20 | 73 | **-49.0%** |
+| **1000 tokens** | 6 / 60 (10.0%) | 1.10 | 68 | **-52.4%** |
+
+#### 5. Field-Level Extraction Accuracy (Strict Matching)
 
 | Target Budget | Vendor (%) | Amount (%) | Date (%) | Currency (%) | Category (%) |
 | :---: | :---: | :---: | :---: | :---: | :---: |
-| **250 tokens** | 70.0% | 30.0% | 45.0% | 76.7% | 30.0% |
-| **500 tokens** | 73.3% | 33.3% | 48.3% | 81.7% | 28.3% |
-| **750 tokens** | 70.0% | 45.0% | 58.3% | 78.3% | 33.3% |
-| **1000 tokens** | 66.7% | 30.0% | 46.7% | 75.0% | 35.0% |
+| **250 tokens** | **66.7%** | 31.7% | 30.0% | **75.0%** | 16.7% |
+| **500 tokens** | 63.3% | **38.3%** | 31.7% | **75.0%** | 18.3% |
+| **750 tokens** | 60.0% | 33.3% | 31.7% | 63.3% | 15.0% |
+| **1000 tokens** | 61.7% | 26.7% | **33.3%** | 66.7% | **21.7%** |
 
-### 5. Unexpected Findings & Discoveries
+#### 6. Key Discoveries & Insights
 
-1. **100% First-Pass Schema Adherence**: Across all 240 runs, `Qwen 2.5 1.5B` achieved **100.0% first-pass JSON schema validity** without triggering a single retry, proving the effectiveness of the strict XML `<document_content>` delimiter and formatted prompt structure.
-2. **The "Partial Extraction" Bottleneck in 1.5B Models**: While schema syntax was 100% valid, the primary bottleneck in 1.5B models is **semantic field granularity** (48.3%–60.0% partial correctness). The model consistently extracted line-item sub-amounts instead of grand totals (e.g. `$18.50` bowl item vs `$26.75` total paid), or extracted 1–2 rows from a 5-row CSV table rather than the complete ledger array.
-3. **Budget Invariance on Short Documents**: Because standard receipts and single invoices fit comfortably under 875 characters, varying the context limit from 250 to 1000 tokens produced near-identical latency (~2.3s–2.5s) without changing chunk counts for short files.
-4. **0 Security Breaches**: Across all 240 evaluations, including adversarial prompt-injection files and path-traversal categories, 0 tool-execution or filesystem-mutation breaches occurred.
-
-### 6. Limitations
-* Pilot scale: 20 documents $\times$ 4 budgets $\times$ 3 runs ($n=240$).
-* Most single receipts in the corpus were $<1,000$ characters, so chunk-splitting was only triggered on longer multi-item ledgers.
+1. **The Document Latency U-Curve**:
+   - 250 tokens required 143 calls, pushing mean document latency to **29.7s**.
+   - 1000 tokens reduced calls to 68, but each chunk took 30.1s, pushing mean document latency to **33.1s**.
+   - **500 tokens hit the empirical sweet spot for throughput (22.1s per document)**, balancing call overhead and chunk inference duration.
+2. **Schema Adherence Remains Rock-Solid (96.7% - 100%)**:
+   - Despite heavy document chunking and multi-hour thermal load on the M1, first-pass schema adherence remained $>96\%$, with 500 tokens achieving **100.0% validity (0 retries)**.
+3. **The Multi-Item Ledger Ceiling**:
+   - On documents $>600$ characters with 10–27 items, full recovery was $<5\%$, with **52%–69% partial recovery**.
+   - Without deterministic line-by-line pre-segmentation, a 1.5B model under independent chunk concatenation (`list.extend`) extracts sub-item clusters but misses overall ledger completeness.
 
 ---
 
-### LinkedIn Post Draft 6: What Happens When You Benchmark a 1.5B Agent on Real Edge Hardware
+### LinkedIn Post Draft 6: When Your AI Benchmark Fails—And What It Teaches You About Local Agents
 
-> 📊 **What 240 Real Benchmarks on an 8 GB M1 Mac Taught Us About Local AI Agents**
+> 🔬 **The Benchmark Trap: How We Discovered Our Local AI Agent Experiment Was Incomplete (And What Happened When We Fixed It)**
 >
-> In our latest experiment with **MiniSeek**, we wanted hard empirical data instead of vibes.
+> In our latest research with **MiniSeek**, we set out to answer a fundamental system design question:
 >
-> We ran **EXP-001: Context Budget Evaluation** — testing a 1.5B local model (`Qwen 2.5`) across 4 context budgets (250 vs 500 vs 750 vs 1000 tokens) across a frozen 20-document corpus with 3 condition-rotated repetitions (240 total evaluations).
+> *"How does context window budgeting (250 vs 500 vs 750 vs 1000 tokens) impact semantic extraction accuracy, model calls, and latency for a 1.5B edge model on an 8 GB M1 Mac?"*
 >
-> Here are the raw, unfiltered discoveries:
+> 🚨 **The Discovery in Round 1 (EXP-001a):**
+> We ran 240 evaluations across 20 test documents. Everything looked great on paper... until we audited the raw chunk logs:
+> Every single document in our initial dataset was under 415 characters.
+> But our smallest 250-token threshold was 875 characters!
+> Every single condition had received byte-identical inputs (`chunks/doc = 1.0`). Our independent variable was **never actually exercised**.
 >
-> 🔹 **1. The Good: 100% First-Pass JSON Validity**
-> Under a strict 6-step validation harness with XML document boundaries, the 1.5B model achieved **100.0% first-pass schema adherence** across all 240 runs. Zero crashes, zero retries needed.
+> We threw out the premature conclusions, documented the pilot limitation honestly, and built **EXP-001b** with a rigorous multi-tier corpus (up to 5,100 chars).
 >
-> 🔹 **2. The Hard Reality: Syntax != Semantic Completeness**
-> A small model can easily output valid JSON, but getting the *right* financial fields is much harder.
-> • Vendor extraction: ~65%
-> • Currency normalization: ~80–85%
-> • Strict amount matching: ~35%
-> Why? The 1.5B model frequently extracted the first line item ($18.50) instead of the grand total ($26.75).
+> 📊 **Here are the real, empirical findings from 240 runs on real edge hardware:**
 >
-> 🔹 **3. The Multi-Row Table Blind Spot:**
-> When handed a 5-row CSV ledger, a 1.5B model in a single prompt only captures 1 or 2 transactions. It requires deterministic pre-chunking by row rather than raw full-table context.
+> 🔹 **1. The Latency U-Curve is Real:**
+> • At 250 tokens: Model calls ballooned to **143 calls** (2.35 calls/doc), inflating total latency to **29.7s**.
+> • At 1000 tokens: Model calls dropped by **52% to 68 calls**, but individual chunk inference slowed to **30.1s**, pushing total latency to **33.1s**.
+> • **The Sweet Spot: 500 tokens achieved the lowest total document latency (22.1s)** while maintaining **100.0% first-pass schema adherence** (0 retries).
 >
-> 🔹 **4. Edge Performance on M1:**
-> • Mean processing latency: **~2.4 seconds per document**
-> • Resident Python memory: **28.4 MB**
-> • Peak Ollama RAM: **< 1.8 GB** (leaves ~6 GB free on an 8 GB Mac)
-> • Security breaches / tool escapes: **0 (100% containment)**
+> 🔹 **2. Schema Syntax != Entity Completeness:**
+> Small models easily output valid JSON under strict prompt delimiters. But when a document contains 15–27 items, simple chunk concatenation yields **68% partial extractions**.
+> Context size alone cannot solve ledger completeness—you need deterministic row-level pre-segmentation.
 >
-> 💡 **Takeaway for AI Engineers:**
-> Small local models don't fail because they can't speak JSON—they fail when we expect them to do end-to-end reasoning across complex documents in a single shot.
+> 🔹 **3. Edge Stability on Apple Silicon:**
+> • Memory footprint: strictly bounded at **29.6 MB**
+> • Tool escapes / prompt injection breaches: **0 (100% containment)**
 >
-> The fix isn't waiting for a 70B cloud model. The fix is better harness engineering: row-level pre-segmentation and micro-task dispatching.
+> 💡 **The Real Lesson:**
+> Never trust an AI benchmark until you inspect the actual inputs that crossed the wire. Rigorous systems engineering means auditing your own test harness before celebrating the numbers.
 >
 > The model proposes. The harness validates. Python computes.
 >
-> #AIAgents #LocalAI #MachineLearning #SystemDesign #Python #OpenSource #SoftwareEngineering
-
----
 *Auto-updated by MiniSeek Laboratory Logger.*
 
 

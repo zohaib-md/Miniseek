@@ -25,6 +25,9 @@ from miniseek.applications.synthesizer.ingestion import DocumentIngestionEngine
 from miniseek.applications.synthesizer.extractor import SemanticExpenseExtractor
 from miniseek.applications.synthesizer.math_engine import ExpenseNormalizer
 
+import urllib.request
+import urllib.error
+
 BUDGET_CONDITIONS = [250, 500, 750, 1000]
 
 REPETITION_ORDERS = [
@@ -39,6 +42,73 @@ def get_peak_memory_mb() -> float:
     if sys.platform == "darwin":
         return round(usage.ru_maxrss / (1024 * 1024), 2)
     return round(usage.ru_maxrss / 1024, 2)
+
+class BenchOllamaProvider(OllamaProvider):
+    """
+    Experimental subclass of OllamaProvider with extended HTTP timeout (180s)
+    to accommodate long document inference on 8GB M1 hardware.
+    Zero changes to miniseek/ application code.
+    """
+    def __init__(self, model_name: str = "qwen2.5:1.5b", host: str = "http://127.0.0.1:11434", timeout: int = 180):
+        super().__init__(model_name=model_name, host=host)
+        self.timeout = timeout
+
+    def chat(self, messages: List[Dict[str, str]], system: Optional[str] = None) -> Dict[str, Any]:
+        url = f"{self.host}/api/chat"
+        
+        payload_messages = []
+        if system:
+            payload_messages.append({"role": "system", "content": system})
+        payload_messages.extend(messages)
+
+        payload = {
+            "model": self.model_name,
+            "messages": payload_messages,
+            "stream": False,
+            "format": "json"
+        }
+
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                body = response.read().decode("utf-8")
+                res_json = json.loads(body)
+                return {
+                    "content": res_json.get("message", {}).get("content", ""),
+                    "model": res_json.get("model"),
+                    "total_duration_ms": res_json.get("total_duration", 0) // 1_000_000,
+                    "eval_count": res_json.get("eval_count", 0),
+                    "eval_duration_ms": res_json.get("eval_duration", 0) // 1_000_000
+                }
+        except Exception as e:
+            # If a timeout occurs on heavy load, retry once with fresh Request and 240s
+            print(f"\n[BenchOllamaProvider] Request warning ({e}), retrying once with fresh request and 240s timeout...", flush=True)
+            try:
+                req_retry = urllib.request.Request(
+                    url,
+                    data=data,
+                    headers={"Content-Type": "application/json"},
+                    method="POST"
+                )
+                with urllib.request.urlopen(req_retry, timeout=240) as response:
+                    body = response.read().decode("utf-8")
+                    res_json = json.loads(body)
+                    return {
+                        "content": res_json.get("message", {}).get("content", ""),
+                        "model": res_json.get("model"),
+                        "total_duration_ms": res_json.get("total_duration", 0) // 1_000_000,
+                        "eval_count": res_json.get("eval_count", 0),
+                        "eval_duration_ms": res_json.get("eval_duration", 0) // 1_000_000
+                    }
+            except Exception as e2:
+                raise TimeoutError(f"Ollama benchmark request timed out after retry: {e2}")
 
 class EXP001Runner:
     """
@@ -60,7 +130,7 @@ class EXP001Runner:
             "system_prompt_version": "v1.0",
             "schema_version": "v1.0"
         }
-        self.llm = OllamaProvider(model_name="qwen2.5:1.5b", host="http://127.0.0.1:11434")
+        self.llm = BenchOllamaProvider(model_name="qwen2.5:1.5b", host="http://127.0.0.1:11434", timeout=180)
         self.extractor = SemanticExpenseExtractor(llm=self.llm)
 
         # Estimate fixed prompt overhead tokens
@@ -203,7 +273,7 @@ class EXP001Runner:
                 field_matches = {"vendor": False, "amount": False, "date": False, "currency": False, "category": False}
                 return "INCORRECT", field_matches
 
-    def run_pilot(self) -> Dict[str, Any]:
+    def run_pilot(self, checkpoint_file: Optional[Path] = None, experiment_id: str = "EXP-001b") -> Dict[str, Any]:
         """Runs the complete 4-budget x 20-doc x 3-run evaluation pilot."""
         raw_runs: List[Dict[str, Any]] = []
 
@@ -276,11 +346,29 @@ class EXP001Runner:
                     doc_start_time = time.time()
 
                     for chunk_idx, chunk in enumerate(chunks):
-                        txs, telemetry = self.extractor.extract_from_chunk(
-                            chunk_text=chunk,
-                            source_file=doc["document_name"],
-                            chunk_index=chunk_idx
-                        )
+                        try:
+                            txs, telemetry = self.extractor.extract_from_chunk(
+                                chunk_text=chunk,
+                                source_file=doc["document_name"],
+                                chunk_index=chunk_idx
+                            )
+                        except Exception as e:
+                            print(f"\n[Warning] {doc_id} chunk {chunk_idx} extraction error ({e})", flush=True)
+                            txs = []
+                            from miniseek.applications.synthesizer.extractor import ExtractionTelemetry
+                            telemetry = ExtractionTelemetry(
+                                source_file=doc["document_name"],
+                                doc_type="TEXT",
+                                chunk_index=chunk_idx,
+                                model_name=self.model_config["model_name"],
+                                runtime=self.model_config["runtime"],
+                                status="NEEDS_REVIEW",
+                                transactions_extracted=0,
+                                retry_count=1,
+                                is_valid=False,
+                                duration_ms=int((time.time() - doc_start_time) * 1000),
+                                validation_error=f"ExtractionError: {e}"
+                            )
                         extracted_raw.extend(txs)
                         chunk_latencies.append(telemetry.duration_ms)
                         first_pass_flags.append(telemetry.retry_count == 0 and telemetry.is_valid)
@@ -327,19 +415,48 @@ class EXP001Runner:
                         "peak_memory_mb": get_peak_memory_mb()
                     }
                     raw_runs.append(run_record)
+                    print(f" [{doc_id}:{actual_chunks}c]", end="", flush=True)
 
-                print(f" Done ({int(time.time() - cond_start_time)}s)")
+                print(f" -> Condition Complete ({int(time.time() - cond_start_time)}s)")
+
+                # Incremental persistence: save raw results after each condition
+                if checkpoint_file:
+                    chk_data = {
+                        "metadata": {
+                            "experiment_id": experiment_id,
+                            "experiment_name": "Context Budget Evaluation",
+                            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                            "model_config": self.model_config,
+                            "prompt_overhead_tokens": self.prompt_overhead_tokens,
+                            "budget_conditions": BUDGET_CONDITIONS,
+                            "repetition_orders": REPETITION_ORDERS,
+                            "total_evaluations": len(raw_runs),
+                            "chunk_reconstruction_mechanism": (
+                                "Mechanism C: Each chunk is processed independently via a separate model call. "
+                                "Extracted transactions are concatenated (list.extend). No second-pass reconciliation, "
+                                "deduplication, or cross-chunk merging is performed."
+                            )
+                        },
+                        "raw_runs": raw_runs
+                    }
+                    with open(checkpoint_file, "w", encoding="utf-8") as f:
+                        json.dump(chk_data, f, indent=2)
 
         return {
             "metadata": {
-                "experiment_id": "EXP-001",
+                "experiment_id": experiment_id,
                 "experiment_name": "Context Budget Evaluation",
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "model_config": self.model_config,
                 "prompt_overhead_tokens": self.prompt_overhead_tokens,
                 "budget_conditions": BUDGET_CONDITIONS,
                 "repetition_orders": REPETITION_ORDERS,
-                "total_evaluations": len(raw_runs)
+                "total_evaluations": len(raw_runs),
+                "chunk_reconstruction_mechanism": (
+                    "Mechanism C: Each chunk is processed independently via a separate model call. "
+                    "Extracted transactions are concatenated (list.extend). No second-pass reconciliation, "
+                    "deduplication, or cross-chunk merging is performed."
+                )
             },
             "raw_runs": raw_runs
         }
@@ -407,6 +524,7 @@ class EXP001Runner:
                 "first_pass_schema_valid_pct": round(first_pass_count / total_evals * 100, 1),
                 "total_model_calls": total_model_calls,
                 "total_retries": total_retries,
+                "docs_requiring_multiple_chunks": sum(1 for r in budget_runs if r["actual_chunks"] > 1),
                 "mean_chunks_per_doc": round(total_chunks / total_evals, 2),
                 "mean_coverage_ratio": round(sum(coverages) / len(coverages) * 100, 1) if coverages else 100.0,
                 "mean_chunk_latency_ms": round(sum(all_chunk_latencies) / len(all_chunk_latencies), 1) if all_chunk_latencies else 0,
@@ -458,7 +576,24 @@ class EXP001Runner:
 
         lines.extend([
             "",
-            "## 3. Results by Document-Length Group",
+            "## 3. Chunk Distribution & Model Call Efficiency",
+            "",
+            "> **Chunk Reconstruction Mechanism**: Each chunk is processed independently via a separate model call. Extracted transactions are concatenated (`list.extend`). No second-pass reconciliation, deduplication, or cross-chunk merging is performed.",
+            "",
+            "| Target Budget | Multi-Chunk Docs | Mean Chunks/Doc | Total Model Calls | Total Chunks |",
+            "| :---: | :---: | :---: | :---: | :---: |"
+        ])
+
+        for b, data in sorted(summary.items()):
+            lines.append(
+                f"| **{b} tokens** | {data['docs_requiring_multiple_chunks']}/{data['total_evaluations']} | "
+                f"{data['mean_chunks_per_doc']} | {data['total_model_calls']} | "
+                f"{int(data['mean_chunks_per_doc'] * data['total_evaluations'])} |"
+            )
+
+        lines.extend([
+            "",
+            "## 4. Results by Document-Length Group",
             ""
         ])
 
@@ -478,7 +613,7 @@ class EXP001Runner:
             lines.append("")
 
         lines.extend([
-            "## 4. Field-Level Accuracy (Strict Matching)",
+            "## 5. Field-Level Accuracy (Strict Matching)",
             "",
             "> **Rule**: `extracted = None` is treated as correct only when ground truth is genuinely `None`.",
             "",
@@ -492,7 +627,7 @@ class EXP001Runner:
 
         lines.extend([
             "",
-            "## 5. Latency, Model-Call Efficiency & Coverage Diagnostics",
+            "## 6. Latency, Model-Call Efficiency & Coverage Diagnostics",
             "",
             "| Target Budget | Chunks / Doc | Unique Coverage (%) | Mean Chunk Latency | Median Chunk Latency | Mean Total Doc Latency | Median Total Doc Latency | Retries Needed |",
             "| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |"
@@ -507,11 +642,9 @@ class EXP001Runner:
 
         lines.extend([
             "",
-            "## 6. Key Discoveries & Discussion",
+            "## 7. Key Discoveries & Discussion",
             "",
-            "1. **100% First-Pass Schema Adherence**: Under strict JSON formatting in the prompt with XML `<document_content>` boundaries, Qwen 2.5 1.5B achieved 100% first-pass schema adherence across all 240 runs (0 retries).",
-            "2. **The Partial Extraction Bottleneck**: The primary failure mode in the 1.5B edge model is extracting sub-line items rather than document grand totals (e.g. meal items vs total paid), leading to 48.3%–60.0% partially correct classifications.",
-            "3. **Zero Security Breaches**: 0 tool-execution or filesystem-mutation breaches across all prompt-injection and path-traversal documents.",
+            "*(Discoveries to be written from empirical data — not pre-filled.)*",
             "",
             "---",
             "*Report generated deterministically by MiniSeek Evaluation Engine.*"
@@ -520,18 +653,33 @@ class EXP001Runner:
         return "\n".join(lines)
 
 def main():
-    dataset_file = REPO_ROOT / "evaluation" / "datasets" / "synthesizer" / "exp001_corpus.json"
+    import argparse
+    parser = argparse.ArgumentParser(description="EXP-001 Context Budget Evaluation")
+    parser.add_argument("--variant", default="b", choices=["a", "b"], help="Experiment variant (a=original pilot, b=corrected corpus)")
+    args = parser.parse_args()
+
+    if args.variant == "b":
+        dataset_file = REPO_ROOT / "evaluation" / "datasets" / "synthesizer" / "exp001b_corpus.json"
+        results_filename = "EXP-001b_raw_results.json"
+        report_filename = "EXP-001b_report.md"
+        experiment_id = "EXP-001b"
+    else:
+        dataset_file = REPO_ROOT / "evaluation" / "datasets" / "synthesizer" / "exp001_corpus.json"
+        results_filename = "EXP-001_raw_results.json"
+        report_filename = "EXP-001_report.md"
+        experiment_id = "EXP-001a"
+
     results_dir = REPO_ROOT / "evaluation" / "results"
     reports_dir = REPO_ROOT / "evaluation" / "reports"
 
     results_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
+    raw_results_file = results_dir / results_filename
     runner = EXP001Runner(dataset_path=dataset_file)
-    raw_data = runner.run_pilot()
+    raw_data = runner.run_pilot(checkpoint_file=raw_results_file, experiment_id=experiment_id)
 
-    # Save raw results
-    raw_results_file = results_dir / "EXP-001_raw_results.json"
+    # Save final raw results
     with open(raw_results_file, "w", encoding="utf-8") as f:
         json.dump(raw_data, f, indent=2)
     print(f"\n✅ Saved raw results: {raw_results_file}")
@@ -540,10 +688,11 @@ def main():
     summary = EXP001Runner.compute_summary_metrics(raw_data)
     report_md = EXP001Runner.generate_markdown_report(summary, raw_data)
 
-    report_file = reports_dir / "EXP-001_report.md"
+    report_file = reports_dir / report_filename
     report_file.write_text(report_md, encoding="utf-8")
     print(f"✅ Generated pilot report: {report_file}")
     print("\n" + report_md)
 
 if __name__ == "__main__":
     main()
+
