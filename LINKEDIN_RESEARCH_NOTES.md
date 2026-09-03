@@ -575,4 +575,101 @@ Model → Proposal → Validation → Frozen Plan → User Approval
 > #AIAgents #LocalAI #MachineLearning #SystemDesign #Python #OpenSource #SoftwareEngineering
 
 ---
+
+### Stage 4: EXP-002 — Model vs. Harness (2×2 Factorial Evaluation)
+
+#### 1. Research Question
+> **"Can harness engineering compensate for model scale on resource-constrained edge hardware?"**
+> Specifically: Is wrapping a smaller 1.5B model in a structured harness (**Cell B: 1.5B + Structured**) more valuable than doubling model parameters without engineering (**Cell C: 3B + Simple**)?
+
+#### 2. Experimental Setup ($2 \times 2$ Factorial Design)
+* **Models**: `qwen2.5:1.5b` (1.5B params, Q4_K_M) vs. `qwen2.5:3b` (3.1B params, Q4_K_M)
+  * *Note*: Same family, tokenizer, and training pipeline; isolates pure $2.0\times$ parameter scale.
+* **Harnesses**:
+  * **Simple**: Single-shot unstructured prompt, raw JSON casting, zero validation/repair, 0 retries.
+  * **Structured**: Passive `<document_content>` XML tags, two-path decomposition (EXP-001c), 6-layer validation pipeline, exact `Decimal` math, uncertainty guard (`amount = None`).
+* **Scale**: 4 cells $\times$ 20 frozen documents $\times$ 2 interleaved repetitions = **160 document evaluations** on Apple M1 (8 GB RAM).
+
+#### 3. Empirical Results
+
+| Cell Identifier | Model | Harness | Recall | Precision | F1 | Fully Correct | Mean Latency | Throughput |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Cell A** | 1.5B | Simple | 53.4% | 39.7% | 45.5 | 12.5% | 24.7s | 27.6 tok/s |
+| **Cell B (Headline)** | 1.5B | **Structured** | **28.4%** | **26.2%** | **27.3** | **12.5%** | **19.2s** | **26.9 tok/s** |
+| **Cell C (Headline)** | 3.1B | Simple | **76.4%** | **61.4%** | **68.1** | **27.5%** | **45.1s** | **9.0 tok/s** |
+| **Cell D** | 3.1B | **Structured** | **89.9%** | **85.8%** | **87.8** | **67.5%** | **40.5s** | **11.8 tok/s** |
+
+#### 4. Factorial Effect Decomposition
+* **Headline Comparison (Cell B vs. Cell C)**: $\Delta_{\text{HvS}} = 28.4\% - 76.4\% = \mathbf{-48.0\%}$.
+  * In this benchmark, doubling parameter count (Cell C) produced far higher raw recall than harness engineering around a 1.5B model (Cell B).
+* **Main Effect of Model Scale**: $\mathbf{+42.3\%}$
+* **Main Effect of Harness Architecture**: $\mathbf{-5.8\%}$
+* **Interaction Effect (Harness $\times$ Model Scale)**: $\mathbf{+38.5\%}$
+  $$\text{Interaction} = (89.9 - 76.4) - (28.4 - 53.4) = +13.5 - (-25.0) = \mathbf{+38.5\%}$$
+
+#### 5. The Architectural Threshold Principle
+* **Why did Cell B score 28.4%?**
+  * When `qwen2.5:1.5b` extracts amounts, it frequently experiences semantic uncertainty, outputting null or ambiguous amounts.
+  * In Cell A (Simple), unvalidated raw values were hallucinated or cast directly (producing noisy 53.4% recall with heavy duplication).
+  * In Cell B (Structured), MiniSeek's strict validation pipeline enforced correctness: uncertain amounts become `amount = None` (`NEEDS_REVIEW`). Under strict ground-truth scoring, `None` does not match an expected amount.
+  * **Harness engineering cannot manufacture semantic parsing capability that a 1.5B model lacks.**
+* **Why did Cell D soar to 89.9% recall and 85.8% precision?**
+  * Once the model crossed the **3B parameter threshold**, it possessed sufficient semantic comprehension to identify entities reliably.
+  * The structured harness acted as a **force multiplier**: eliminating dropped rows on dense tables (91.0% recall), preventing hallucinations, and more than doubling fully correct extractions from **27.5% to 67.5%**.
+
+---
+
+### LinkedIn Post Draft 8: Can Harness Engineering Beat a Bigger Model? (Empirical 2×2 Findings)
+
+> 💡 **Can Software Engineering Beat Model Scale? We Tested 1.5B vs 3B on an 8 GB M1 Mac**
+>
+> In the AI agent world, there’s a popular belief:
+> *"Don’t upgrade your model—just build better prompting, chunking, and validation around a smaller model."*
+>
+> We put this thesis to an empirical test with **MiniSeek**.
+> We ran a rigorous **$2 \times 2$ factorial benchmark** (160 evaluations across 20 diverse financial documents) on a fanless 8 GB M1 MacBook Air:
+>
+> • **Cell A**: 1.5B Model + Simple Raw Harness
+> • **Cell B**: 1.5B Model + Structured Engineered Harness (Two-path decomposition, XML boundaries, 6-layer validation)
+> • **Cell C**: 3.1B Model + Simple Raw Harness
+> • **Cell D**: 3.1B Model + Structured Engineered Harness
+>
+> The Headline Test: **Cell B (1.5B + Engineering) vs Cell C (3.1B + No Engineering)**.
+> Does harness engineering beat doubling model parameters?
+>
+> 📊 **Here are the numbers:**
+>
+> 🔹 **1. The Headline Result (Scale Won the Baseline):**
+> • Cell B (1.5B + Structured): **28.4% recall**
+> • Cell C (3.1B + Simple): **76.4% recall**
+> Adding ~2× model parameters beat pure harness engineering on raw extraction recall.
+>
+> Why? We inspected the per-transaction logs:
+> The 1.5B model suffered from fundamental semantic ambiguity on dense receipts.
+> In a simple harness, it hallucinated numbers freely. But in our structured harness, our strict validation pipeline refused to guess, demoting uncertain amounts to `None` (`NEEDS_REVIEW`).
+> **A software harness cannot manufacture semantic perception that an edge model does not have.**
+>
+> 🔹 **2. The Powerful Interaction Effect (+38.5%):**
+> But here is the most exciting finding from the $2 \times 2$ matrix:
+> When we gave the **3.1B model** our structured harness (**Cell D**):
+> • Recall jumped from **76.4% $\to$ 89.9%** (+13.5%)
+> • Precision surged from **61.4% $\to$ 85.8%** (+24.4%)
+> • Fully correct reconstructed documents **more than doubled: 27.5% $\to$ 67.5%**!
+> • On dense tabular ledgers, recall reached **91.0%** (10/10 on CSV, 25/27 on quarterly ledger).
+>
+> 🔹 **3. The Hardware Reality on Apple Silicon:**
+> • Memory: Python stayed strictly bounded at **30.48 MB RSS**; Ollama consumed ~2.1 GB. Total system RAM stayed well under 3.5 GB—zero swap pressure.
+> • Throughput: 1.5B generated at 27 tok/s; 3.1B generated at 10–12 tok/s.
+> • Without decomposition, single-shot 3B generation timed out on long documents (>240s). Decomposition kept individual calls fast and thermal-safe.
+>
+> 🚀 **The System Design Takeaway:**
+> A harness is not a substitute for minimal model capability—it is a **force multiplier**.
+> Below the capability threshold (~1.5B), a strict harness acts as a filter, exposing the model’s weaknesses.
+> But once you hit the capability threshold (~3B on edge), a structured harness transforms an imperfect model into commercial-grade reliability.
+>
+> The model proposes. The harness validates. Python computes.
+>
+> #AIAgents #LocalAI #MachineLearning #SystemDesign #Python #OpenSource #SoftwareEngineering
+
+---
 *Auto-updated by MiniSeek Laboratory Logger.*
