@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# MiniSeek Standalone Launcher
+
+# Resolve symlinks to find the true project root
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+DIR="$(cd -P "$(dirname "$SOURCE")/.." >/dev/null 2>&1 && pwd)"
+
+# Fallback to known location if needed
+if [ ! -f "$DIR/miniseek/__init__.py" ]; then
+    DIR="/Users/mohammadzohaib/Desktop/Miniseek"
+fi
+
+export PYTHONPATH="${DIR}:${PYTHONPATH}"
+exec python3 -m miniseek.cli "$@"

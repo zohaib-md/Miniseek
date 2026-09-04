@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "miniseek"
+version = "1.0.0"
+description = "Local-first deterministic AI agent harness on edge hardware (Apple Silicon M1 / 8 GB RAM)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "MiniSeek Contributors" }
+]
+keywords = [
+    "ai-agents",
+    "local-ai",
+    "ollama",
+    "apple-silicon",
+    "harness-engineering",
+    "edge-ai",
+    "react-agent",
+    "plan-first"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = []
+
+[project.scripts]
+miniseek = "miniseek.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["miniseek*"]

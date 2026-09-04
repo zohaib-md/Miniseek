@@ -1,5 +1,6 @@
 # Binaries and local apps
-bin/
+bin/*
+!bin/miniseek
 *.app/
 
 # Python cache
