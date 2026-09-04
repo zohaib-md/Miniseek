@@ -342,6 +342,7 @@ Miniseek/
 |-- docs/
 |   |-- ARCHITECTURE.md               # Detailed system design and invariants
 |   |-- CLI_REFERENCE.md              # Complete CLI subcommand specification
+|   |-- LEARNING_NOTES.md             # Engineering field manual and case studies
 |   `-- RESEARCH_FINDINGS.md          # Empirical benchmarks and data tables
 |-- evaluation/
 |   |-- benchmarks/                   # Standard benchmark harness and runner
@@ -410,6 +411,7 @@ Key test coverage areas:
 * [CLI Reference Manual](docs/CLI_REFERENCE.md): Full documentation for all commands, parameters, and flags.
 * [System Architecture Specification](docs/ARCHITECTURE.md): Deep architectural overview, design philosophy, and security models.
 * [Empirical Research Findings](docs/RESEARCH_FINDINGS.md): Detailed benchmark methodology, raw data, and statistical analysis.
+* [Engineering Field Manual](docs/LEARNING_NOTES.md): Technical case studies, design patterns, and systems lessons for local agents.
 * [Contributing Guidelines](CONTRIBUTING.md): Code standards, commit conventions, and development practices.
 * [License](LICENSE): MIT License terms.
 
